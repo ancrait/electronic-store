@@ -1,0 +1,119 @@
+services:
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: shop-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: shop-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: shop-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+
+  auth-db:
+    image: postgres:16-alpine
+    container_name: shop-auth-db
+    ports:
+      - "${AUTH_DB_PORT}:5432"
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME}
+      POSTGRES_USER: ${AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD}
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER} -d ${AUTH_DB_NAME}"]
+      interval: 10s
+      retries: 5
+
+  product-db:
+    image: postgres:16-alpine
+    container_name: shop-product-db
+    ports:
+      - "${PRODUCT_DB_PORT}:5432"
+    environment:
+      POSTGRES_DB: ${PRODUCT_DB_NAME}
+      POSTGRES_USER: ${PRODUCT_DB_USER}
+      POSTGRES_PASSWORD: ${PRODUCT_DB_PASSWORD}
+    volumes:
+      - product_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PRODUCT_DB_USER} -d ${PRODUCT_DB_NAME}"]
+      interval: 10s
+      retries: 5
+
+  order-db:
+    image: postgres:16-alpine
+    container_name: shop-order-db
+    ports:
+      - "${ORDER_DB_PORT}:5432"
+    environment:
+      POSTGRES_DB: ${ORDER_DB_NAME}
+      POSTGRES_USER: ${ORDER_DB_USER}
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD}
+    volumes:
+      - order_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ORDER_DB_USER} -d ${ORDER_DB_NAME}"]
+      interval: 10s
+      retries: 5
+
+  notification-db:
+    image: postgres:16-alpine
+    container_name: shop-notification-db
+    ports:
+      - "${NOTIFICATION_DB_PORT}:5432"
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME}
+      POSTGRES_USER: ${NOTIFICATION_DB_USER}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+    volumes:
+      - notification_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER} -d ${NOTIFICATION_DB_NAME}"]
+      interval: 10s
+      retries: 5
+
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: shop-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  auth_db_data:
+  product_db_data:
+  order_db_data:
+  notification_db_data:
