@@ -1,6 +1,6 @@
-# VOLT — фронтенд
+# VOLT — frontend
 
-React + Vite. Спілкується лише з api-gateway (`VITE_API_URL`).
+React + Vite. Communicates only with the API gateway. (`VITE_API_URL`).
 
 ```bash
 npm install
