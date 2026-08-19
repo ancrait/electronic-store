@@ -1,0 +1,138 @@
+services:
+
+  auth-service:
+    build:
+      context: ../services/auth-service
+      dockerfile: ../../docker/auth.Dockerfile
+    container_name: shop-auth-service
+    environment:
+      AUTH_DB_HOST: auth-db
+      AUTH_DB_PORT: 5432
+      AUTH_DB_NAME: ${AUTH_DB_NAME}
+      AUTH_DB_USER: ${AUTH_DB_USER}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "8081:8081"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  product-service:
+    build:
+      context: ../services/product-service
+      dockerfile: ../../docker/product.Dockerfile
+    container_name: shop-product-service
+    environment:
+      PRODUCT_DB_HOST: product-db
+      PRODUCT_DB_PORT: 5432
+      PRODUCT_DB_NAME: ${PRODUCT_DB_NAME}
+      PRODUCT_DB_USER: ${PRODUCT_DB_USER}
+      PRODUCT_DB_PASSWORD: ${PRODUCT_DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "8082:8082"
+    depends_on:
+      product-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  order-service:
+    build:
+      context: ../services/order-service
+      dockerfile: ../../docker/order.Dockerfile
+    container_name: shop-order-service
+    environment:
+      ORDER_DB_HOST: order-db
+      ORDER_DB_PORT: 5432
+      ORDER_DB_NAME: ${ORDER_DB_NAME}
+      ORDER_DB_USER: ${ORDER_DB_USER}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      PRODUCT_SERVICE_URL: http://product-service:8082
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "8083:8083"
+    depends_on:
+      order-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      product-service:
+        condition: service_started
+
+  notification-service:
+    build:
+      context: ../services/notification-service
+      dockerfile: ../../docker/notification.Dockerfile
+    container_name: shop-notification-service
+    environment:
+      NOTIFICATION_DB_HOST: notification-db
+      NOTIFICATION_DB_PORT: 5432
+      NOTIFICATION_DB_NAME: ${NOTIFICATION_DB_NAME}
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      MAIL_HOST: mailhog
+      MAIL_PORT: 1025
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH}
+      MAIL_SMTP_TLS: ${MAIL_SMTP_TLS}
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "8084:8084"
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: ../../docker/api-gateway.Dockerfile
+    container_name: shop-api-gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      PRODUCT_SERVICE_URL: http://product-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/frontend.Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+    container_name: shop-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
