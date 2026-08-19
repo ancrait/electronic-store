@@ -1,14 +1,14 @@
-# VOLT — магазин електроніки на мікросервісах
+# VOLT — Electronics Store on Microservices
 
-Навчальний pet-проєкт: інтернет-магазин техніки, розбитий на п'ять незалежних Spring Boot
-сервісів, які спілкуються через Kafka та REST, плюс React-фронтенд.
+A learning pet project: an online electronics store split into five independent Spring Boot
+services communicating over Kafka and REST, plus a React frontend.
 
-**Стек:** Java 21 · Spring Boot 4.1.0 · Spring Cloud Gateway 2025.1.2 · Spring Security (JWT) ·
+**Stack:** Java 21 · Spring Boot 4.1.0 · Spring Cloud Gateway 2025.1.2 · Spring Security (JWT) ·
 PostgreSQL 16 · Apache Kafka 7.5.0 · React 18 + Vite · Docker Compose
 
 ---
 
-## Архітектура
+## Architecture
 
 ```
                         ┌──────────────┐
@@ -16,7 +16,7 @@ PostgreSQL 16 · Apache Kafka 7.5.0 · React 18 + Vite · Docker Compose
                         └──────┬───────┘
                                │ REST
                         ┌──────▼───────┐
-                        │ api-gateway  │  :8080  маршрутизація + JWT + CORS
+                        │ api-gateway  │  :8080  routing + JWT + CORS
                         └──┬───┬───┬───┘
              ┌─────────────┘   │   └─────────────┐
       ┌──────▼──────┐   ┌──────▼──────┐   ┌──────▼───────────┐
@@ -34,30 +34,30 @@ PostgreSQL 16 · Apache Kafka 7.5.0 · React 18 + Vite · Docker Compose
                     └──────────────────────┘
 ```
 
-Кожен сервіс — окремий Maven-проєкт із власною базою даних. Спільної бібліотеки немає
-навмисно: DTO подій дублюються в кожному сервісі, тому будь-який з них можна оновити
-й задеплоїти незалежно від решти.
+Every service is a standalone Maven project with its own database. There is deliberately no
+shared library: event DTOs are duplicated in each service, so any of them can be updated and
+deployed independently of the rest.
 
-### Обмін подіями
+### Event flow
 
 ```
-auth-service   ──user-registered-topic──▶  notification-service   лист про реєстрацію
-order-service  ──order-created-topic───▶  notification-service   лист-підтвердження замовлення
-                                      └─▶  product-service        списання залишку зі складу
+auth-service   ──user-registered-topic──▶  notification-service   registration email
+order-service  ──order-created-topic───▶  notification-service   order confirmation email
+                                      └─▶  product-service        stock decrement
 ```
 
-`order-service` синхронно ходить у `product-service` (REST) за актуальною ціною й наявністю
-під час оформлення, а списання залишку відбувається асинхронно — через подію.
+During checkout `order-service` calls `product-service` synchronously (REST) for the current
+price and availability, while the stock decrement happens asynchronously via an event.
 
-### Структура
+### Project layout
 
 ```
 electronic-store/
-├── .env                      # секрети й порти (у .gitignore)
+├── .env                      # secrets and ports (gitignored)
 ├── .env.example
 ├── docker/
-│   ├── docker-compose.yml        # інфраструктура: Kafka, 4 бази, MailHog
-│   ├── docker-compose.app.yml    # застосунки: 5 сервісів + фронтенд
+│   ├── docker-compose.yml        # infrastructure: Kafka, 4 databases, MailHog
+│   ├── docker-compose.app.yml    # applications: 5 services + frontend
 │   ├── auth.Dockerfile
 │   ├── product.Dockerfile
 │   ├── order.Dockerfile
@@ -75,51 +75,51 @@ electronic-store/
     └── .dockerignore
 ```
 
-Пакети всередині сервісу: `configuration`, `controller`, `dto`, `exception`, `kafka`,
+Packages inside each service: `configuration`, `controller`, `dto`, `exception`, `kafka`,
 `model`, `repository`, `security`, `service`.
 
 ---
 
-## Запуск
+## Getting started
 
-### Крок 1. Створити `.env`
+### Step 1. Create `.env`
 
 ```powershell
 copy .env.example .env
 ```
 
-Далі відкрити й підставити свої значення. Мінімум, що треба змінити — `JWT_SECRET`
-(рядок від 32 символів, інакше HS256 не прийме ключ).
+Then open it and fill in your values. The one thing you must change is `JWT_SECRET`
+(at least 32 characters, otherwise HS256 will reject the key).
 
-### Варіант A — усе в Docker
+### Option A — everything in Docker
 
 ```powershell
 cd docker
 docker compose --env-file ..\.env -f docker-compose.yml -f docker-compose.app.yml up -d --build
 ```
 
-Перша збірка триває кілька хвилин: Maven тягне залежності окремо для кожного сервісу.
-Далі шари кешуються, повторний запуск — секунди.
+The first build takes a few minutes: Maven downloads dependencies separately for each service.
+After that the layers are cached and subsequent starts take seconds.
 
-Готово, коли `docker ps` показує 14 контейнерів. Сайт: http://localhost:5173
+You are ready when `docker ps` lists 14 containers. Open http://localhost:5173
 
-### Варіант B — інфраструктура в Docker, сервіси з IDE
+### Option B — infrastructure in Docker, services from the IDE
 
-Зручніше під час розробки: не треба перезбирати образ після кожної правки.
+More convenient while developing: no image rebuild after every code change.
 
 ```powershell
 cd docker
 docker compose --env-file ..\.env -f docker-compose.yml up -d
 ```
 
-Далі в IntelliJ IDEA: встановити плагін **EnvFile**, потім у Run Configuration кожного
-сервісу вкладка EnvFile → Enable EnvFile → «+» → вибрати `.env`. Без цього сервіс
-не стартує — у `jwt.secret` немає значення за замовчуванням.
+Then in IntelliJ IDEA install the **EnvFile** plugin, and for each service go to
+Run Configuration → EnvFile tab → Enable EnvFile → "+" → select `.env`. Without this the
+service will not start, since `jwt.secret` has no default value.
 
-Порядок запуску: `auth-service` → `product-service` → `order-service` →
-`notification-service` → `api-gateway`. Перші два створюють топіки Kafka при старті.
+Startup order: `auth-service` → `product-service` → `order-service` →
+`notification-service` → `api-gateway`. The first two create the Kafka topics on startup.
 
-Фронтенд окремо:
+Frontend separately:
 
 ```powershell
 cd frontend
@@ -127,165 +127,167 @@ npm install
 npm run dev
 ```
 
-### Корисні адреси
+### Endpoints
 
-| Що | Де |
+| What | Where |
 |---|---|
-| Магазин | http://localhost:5173 |
-| API (через gateway) | http://localhost:8080 |
-| Пошта (MailHog) | http://localhost:8025 |
+| Storefront | http://localhost:5173 |
+| API (through the gateway) | http://localhost:8080 |
+| Mail catcher (MailHog) | http://localhost:8025 |
 | Kafka UI | http://localhost:8090 |
 
 ---
 
-## Ролі та адмінка
+## Roles and the admin panel
 
-При реєстрації користувач отримує роль `USER`. Роль `ADMIN` призначається вручну в базі:
+New users get the `USER` role on registration. The `ADMIN` role is granted manually in the database:
 
 ```powershell
-docker exec -it shop-auth-db psql -U auth_user -d auth_db -c "UPDATE users SET role = 'ADMIN' WHERE email = 'ваша@пошта';"
+docker exec -it shop-auth-db psql -U auth_user -d auth_db -c "UPDATE users SET role = 'ADMIN' WHERE email = 'your@email';"
 ```
 
-Після цього треба **вийти й залогінитися знову** — роль зашита всередину JWT, і старий
-токен про неї не знає.
+After that you must **log out and log in again** — the role is embedded in the JWT, and the old
+token knows nothing about it.
 
-В адмінці: додавання товарів і зміна статусів замовлень. Категорії через UI не створюються,
-тільки через API:
+The admin panel supports adding products and changing order statuses. Categories are not
+exposed in the UI, only through the API:
 
 ```powershell
 curl.exe -X POST http://localhost:8080/api/categories `
   -H "Content-Type: application/json" `
-  -H "Authorization: Bearer ТОКЕН" `
-  -d "{\"name\":\"Телевізори\",\"slug\":\"tv\",\"description\":\"ТВ та проектори\"}"
+  -H "Authorization: Bearer TOKEN" `
+  -d "{\"name\":\"TVs\",\"slug\":\"tv\",\"description\":\"TVs and projectors\"}"
 ```
 
-Токен можна взяти з браузера: F12 → Application → Local Storage → ключ `volt.accessToken`.
+You can grab the token from the browser: F12 → Application → Local Storage → key `volt.accessToken`.
 
-При першому старті `product-service` засіває каталог трьома категоріями й шістьма товарами —
-але лише якщо таблиця категорій порожня.
+On first startup `product-service` seeds the catalog with three categories and six products —
+but only when the categories table is empty.
 
 ---
 
 ## API
 
-Усі запити йдуть через gateway на `http://localhost:8080`.
+All requests go through the gateway at `http://localhost:8080`.
 
-| Метод | Шлях | Доступ |
+| Method | Path | Access |
 |---|---|---|
-| POST | `/api/auth/register` | публічний |
-| POST | `/api/auth/login` | публічний |
-| POST | `/api/auth/refresh` | публічний |
-| GET | `/api/auth/me` | авторизований |
+| POST | `/api/auth/register` | public |
+| POST | `/api/auth/login` | public |
+| POST | `/api/auth/refresh` | public |
+| GET | `/api/auth/me` | authenticated |
 | GET | `/api/auth/users` | ADMIN |
-| GET | `/api/products`, `/api/products/{id}` | публічний |
+| GET | `/api/products`, `/api/products/{id}` | public |
 | POST / PUT / DELETE | `/api/products` | ADMIN |
-| GET | `/api/categories`, `/api/categories/{id}` | публічний |
+| GET | `/api/categories`, `/api/categories/{id}` | public |
 | POST / PUT / DELETE | `/api/categories` | ADMIN |
-| POST | `/api/orders` | авторизований |
-| GET | `/api/orders/my`, `/api/orders/{id}` | власник або ADMIN |
+| POST | `/api/orders` | authenticated |
+| GET | `/api/orders/my`, `/api/orders/{id}` | owner or ADMIN |
 | GET | `/api/orders/all` | ADMIN |
 | PUT | `/api/orders/{id}/status` | ADMIN |
 | GET | `/api/notifications` | ADMIN |
 
-Параметри каталогу: `?search=&categoryId=&brand=&minPrice=&maxPrice=&page=&size=&sortBy=&direction=`
+Catalog query parameters: `?search=&categoryId=&brand=&minPrice=&maxPrice=&page=&size=&sortBy=&direction=`
 
-Приклад реєстрації:
+Registration example:
 
 ```powershell
 curl.exe -X POST http://localhost:8080/api/auth/register `
   -H "Content-Type: application/json" `
-  -d "{\"firstName\":\"Андрій\",\"lastName\":\"Сорока\",\"email\":\"test@test.com\",\"password\":\"123456\"}"
+  -d "{\"firstName\":\"Andrii\",\"lastName\":\"Soroka\",\"email\":\"test@test.com\",\"password\":\"123456\"}"
 ```
 
 ---
 
-## Безпека
+## Security
 
-- `auth-service` видає пару токенів: access (15 хв) і refresh (7 днів), алгоритм HS256.
-  Паролі зберігаються як BCrypt-хеш.
-- Gateway відсікає неавторизовані запити на закриті маршрути й додає до проксійованого
-  запиту заголовки `X-User-Id` та `X-User-Role`.
-- Кожен сервіс **додатково перевіряє підпис токена сам** — власним `JwtAuthenticationFilter`.
-  Прямий запит повз gateway на `:8082` без валідного токена теж не пройде.
-- CORS налаштований на рівні gateway. Це важливо: Spring Cloud Gateway обробляє preflight
-  `OPTIONS` самостійно й не проксіює його далі, тому конфігурації в downstream-сервісах
-  для preflight недостатньо. `DedupeResponseHeader` прибирає задвоєння заголовків
-  на звичайних запитах.
+- `auth-service` issues a token pair: access (15 min) and refresh (7 days), signed with HS256.
+  Passwords are stored as BCrypt hashes.
+- The gateway rejects unauthenticated requests to protected routes and adds `X-User-Id` and
+  `X-User-Role` headers to the proxied request.
+- Every service **additionally verifies the token signature itself** through its own
+  `JwtAuthenticationFilter`. A direct request to `:8082` bypassing the gateway will not get
+  through without a valid token either.
+- CORS is configured at the gateway level. This matters: Spring Cloud Gateway handles the
+  `OPTIONS` preflight itself and does not proxy it downstream, so configuring CORS only in the
+  downstream services is not enough. `DedupeResponseHeader` removes duplicated headers on
+  regular requests.
 
 ---
 
-## Змінні оточення
+## Environment variables
 
-| Група | Змінні |
+| Group | Variables |
 |---|---|
 | JWT | `JWT_SECRET`, `JWT_ACCESS_EXPIRATION`, `JWT_REFRESH_EXPIRATION` |
-| Бази | `AUTH_DB_*`, `PRODUCT_DB_*`, `ORDER_DB_*`, `NOTIFICATION_DB_*` (`_HOST`, `_PORT`, `_NAME`, `_USER`, `_PASSWORD`) |
+| Databases | `AUTH_DB_*`, `PRODUCT_DB_*`, `ORDER_DB_*`, `NOTIFICATION_DB_*` (`_HOST`, `_PORT`, `_NAME`, `_USER`, `_PASSWORD`) |
 | Kafka | `KAFKA_BOOTSTRAP_SERVERS` |
-| Пошта | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_TLS` |
-| Сервіси | `PRODUCT_SERVICE_URL`, `FRONTEND_URL` |
+| Mail | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_SMTP_AUTH`, `MAIL_SMTP_TLS` |
+| Services | `PRODUCT_SERVICE_URL`, `FRONTEND_URL` |
 
-У `.env` усі адреси вказують на `localhost` — це для запуску з IDE. Всередині мережі Docker
-контейнери звертаються один до одного за іменами сервісів, тому `docker-compose.app.yml`
-перевизначає ці змінні (`AUTH_DB_HOST: auth-db`, `KAFKA_BOOTSTRAP_SERVERS: kafka:29092`).
+In `.env` every address points to `localhost` — that is meant for running from the IDE. Inside
+the Docker network containers reach each other by service name, so `docker-compose.app.yml`
+overrides these variables (`AUTH_DB_HOST: auth-db`, `KAFKA_BOOTSTRAP_SERVERS: kafka:29092`).
 
-За замовчуванням пошта йде в MailHog. Для реального Gmail треба прибрати рядки `MAIL_HOST`
-і `MAIL_PORT` з `docker-compose.app.yml` та вказати в `.env` `smtp.gmail.com:587`,
-`MAIL_SMTP_AUTH=true`, `MAIL_SMTP_TLS=true` і App Password (не звичайний пароль від акаунта).
-
----
-
-## Часті проблеми
-
-**`Connection to localhost:5433 refused`** — контейнер бази не піднявся. Найчастіше `.env`
-не знайдено: compose шукає його поруч із собою, тому потрібен явний `--env-file ..\.env`.
-Перевірити, що файл справді називається `.env`, а не `.env.txt`.
-
-**`Only one usage of each socket address`** — порт зайнятий. Сервіс досі працює в IntelliJ
-або лишився висіти процес: `netstat -ano | findstr ":8082"`, далі `taskkill /PID <номер> /F`.
-
-**`blocked by CORS policy`** у консолі браузера — origin не збігається з `FRONTEND_URL`.
-Зазвичай Vite зайняв 5174 замість 5173. Лікується `strictPort: true` у `vite.config.js`,
-щоб Vite падав з помилкою замість тихої зміни порту.
-
-**`function lower(bytea) does not exist`** — коли параметр фільтра приходить `null`, драйвер
-не знає його типу й шле як `bytea`. Вирішено через `CAST(:param AS String)` у JPQL-запиті
-`ProductRepository`.
-
-**`npm : running scripts is disabled on this system`** — політика PowerShell, не помилка Node.
-`Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` або запуск через `npm.cmd`.
-
-**`UNKNOWN_TOPIC_OR_PARTITION`** у логах notification-service — топіки ще не створені.
-Вони з'являються при старті `auth-service` і `order-service`, тому consumer'и краще
-піднімати після producer'ів.
+By default mail goes to MailHog. For real Gmail, remove the `MAIL_HOST` and `MAIL_PORT` lines
+from `docker-compose.app.yml` and set `smtp.gmail.com:587`, `MAIL_SMTP_AUTH=true`,
+`MAIL_SMTP_TLS=true` and an App Password (not your regular account password) in `.env`.
 
 ---
 
-## Команди
+## Troubleshooting
+
+**`Connection to localhost:5433 refused`** — the database container is not running. Usually
+`.env` was not found: compose looks for it next to itself, so an explicit `--env-file ..\.env`
+is required. Also make sure the file is really named `.env` and not `.env.txt`.
+
+**`Only one usage of each socket address`** — the port is taken. Either the service is still
+running in IntelliJ or a process is left hanging: `netstat -ano | findstr ":8082"`, then
+`taskkill /PID <number> /F`.
+
+**`blocked by CORS policy`** in the browser console — the origin does not match `FRONTEND_URL`.
+Usually Vite grabbed 5174 instead of 5173. Fix it with `strictPort: true` in `vite.config.js`
+so Vite fails loudly instead of silently switching ports.
+
+**`function lower(bytea) does not exist`** — when a filter parameter arrives as `null`, the
+driver does not know its type and sends it as `bytea`. Solved with `CAST(:param AS String)`
+in the `ProductRepository` JPQL query.
+
+**`npm : running scripts is disabled on this system`** — a PowerShell policy, not a Node error.
+Run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` or use `npm.cmd`.
+
+**`UNKNOWN_TOPIC_OR_PARTITION`** in the notification-service logs — the topics do not exist yet.
+They are created when `auth-service` and `order-service` start, so consumers are best started
+after the producers.
+
+---
+
+## Commands
 
 ```powershell
-# логи сервіса
+# service logs
 docker logs -f shop-product-service
 
-# перезібрати один сервіс після правки коду
+# rebuild a single service after a code change
 docker compose --env-file ..\.env -f docker-compose.yml -f docker-compose.app.yml up -d --build product-service
 
-# зупинити все
+# stop everything
 docker compose --env-file ..\.env -f docker-compose.yml -f docker-compose.app.yml down
 
-# зупинити і стерти дані баз
+# stop and wipe database volumes
 docker compose --env-file ..\.env -f docker-compose.yml -f docker-compose.app.yml down -v
 
-# підключитися до бази
+# connect to a database
 docker exec -it shop-product-db psql -U product_user -d product_db
 ```
 
 ---
 
-## Плани
+## Roadmap
 
-- `cart-service` — зараз кошик живе в localStorage браузера
-- `payment-service` і вебхуки платіжної системи
-- Eureka або Consul замість статичних URL у gateway
-- Redis для кешу каталогу
-- Тести: `@DataJpaTest` для репозиторіїв, Testcontainers для інтеграційних
-- CI: збірка образів і прогін тестів на push
+- `cart-service` — the cart currently lives in browser localStorage
+- `payment-service` and payment provider webhooks
+- Eureka or Consul instead of static URLs in the gateway
+- Redis for catalog caching
+- Tests: `@DataJpaTest` for repositories, Testcontainers for integration tests
+- CI: build images and run tests on push
